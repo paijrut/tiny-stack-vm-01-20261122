@@ -32,22 +32,14 @@ export function run(p: Uint8Array, inp: Uint8Array): { stdout: Uint8Array; exit:
     if (op >= 16 && op <= 34 && op !== 23 && op !== 27) {
       const b = D[sp - 1], a = D[sp - 2];
       if (op >= 19 && op <= 22 && !b) return done(4);
-      const r = op === 16 ? a + b :
-        op === 17 ? a - b :
-        op === 18 ? Math.imul(a, b) :
+      const ua = a >>> 0, ub = b >>> 0, s = b & 31;
+      const r = op === 16 ? a + b : op === 17 ? a - b : op === 18 ? Math.imul(a, b) :
         op === 19 ? (a === -2147483648 && b === -1 ? a : (a / b) | 0) :
         op === 20 ? (b === -1 ? 0 : (a % b) | 0) :
-        op === 21 ? Math.floor((a >>> 0) / (b >>> 0)) :
-        op === 22 ? (a >>> 0) % (b >>> 0) :
-        op === 24 ? a & b :
-        op === 25 ? a | b :
-        op === 26 ? a ^ b :
-        op === 28 ? a << (b & 31) :
-        op === 29 ? a >> (b & 31) :
-        op === 30 ? a >>> (b & 31) :
-        op === 32 ? (a === b ? 1 : 0) :
-        op === 33 ? (a < b ? 1 : 0) :
-        ((a >>> 0) < (b >>> 0) ? 1 : 0);
+        op === 21 ? Math.floor(ua / ub) : op === 22 ? ua % ub :
+        op === 24 ? a & b : op === 25 ? a | b : op === 26 ? a ^ b :
+        op === 28 ? a << s : op === 29 ? a >> s : op === 30 ? ua >>> s :
+        op === 32 ? +(a === b) : op === 33 ? +(a < b) : +(ua < ub);
       sp -= 2;
       D[sp++] = r | 0;
       continue;
@@ -111,8 +103,9 @@ export function run(p: Uint8Array, inp: Uint8Array): { stdout: Uint8Array; exit:
 const I = process.env.MAKEFUN_INPUT_DIR ?? '/input';
 const Out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 for (const id of readdirSync(I).sort()) {
-  const r = run(new Uint8Array(readFileSync(join(I, id, 'program.bin'))), new Uint8Array(readFileSync(join(I, id, 'input.bin'))));
-  mkdirSync(join(Out, id), { recursive: true });
-  writeFileSync(join(Out, id, 'stdout.bin'), r.stdout);
-  writeFileSync(join(Out, id, 'exit.txt'), `${r.exit}\n`);
+  const r = run(readFileSync(join(I, id, 'program.bin')), readFileSync(join(I, id, 'input.bin')));
+  const d = join(Out, id);
+  mkdirSync(d, { recursive: true });
+  writeFileSync(join(d, 'stdout.bin'), r.stdout);
+  writeFileSync(join(d, 'exit.txt'), `${r.exit}\n`);
 }
