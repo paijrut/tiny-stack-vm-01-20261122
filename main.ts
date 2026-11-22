@@ -2,13 +2,19 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const S = 256, C = 64, L = 1e6, O = 65536;
-const T: Record<number, number> = {
-  0: 0, 1: 17, 2: 65, 3: 4, 4: 6, 5: 10, 6: 11, 7: 15,
-  16: 9, 17: 9, 18: 9, 19: 9, 20: 9, 21: 9, 22: 9, 23: 5,
-  24: 9, 25: 9, 26: 9, 27: 5, 28: 9, 29: 9, 30: 9, 32: 9,
-  33: 9, 34: 9, 48: 32, 49: 36, 50: 36, 51: 32, 52: 0, 64: 5,
-  65: 8, 80: 4, 81: 4, 82: 1, 83: 4
-};
+function opInfo(op: number): number {
+  if (op < 8) return [0, 17, 65, 4, 6, 10, 11, 15][op];
+  if (op >= 16 && op <= 34 && op !== 31) return (op === 23 || op === 27) ? 5 : 9;
+  if (op >= 48 && op <= 50) return op === 48 ? 32 : 36;
+  if (op === 51) return 32;
+  if (op === 52) return 0;
+  if (op === 64) return 5;
+  if (op === 65) return 8;
+  if (op === 80 || op === 81 || op === 83) return 4;
+  if (op === 82) return 1;
+  return -1;
+}
+
 const enc = new TextEncoder();
 
 export function run(p: Uint8Array, inp: Uint8Array): { stdout: Uint8Array; exit: number } {
@@ -19,8 +25,8 @@ export function run(p: Uint8Array, inp: Uint8Array): { stdout: Uint8Array; exit:
   for (;;) {
     if (steps === L) return done(10);
     if (pc < 0 || pc >= n) return done(9);
-    const op = p[pc], c = T[op];
-    if (c === undefined) return done(5);
+    const op = p[pc], c = opInfo(op);
+    if (c < 0) return done(5);
     const imm = c >> 4, pops = (c >> 2) & 3, pushes = c & 3;
     if (pc + imm >= n) return done(9);
     steps++;
