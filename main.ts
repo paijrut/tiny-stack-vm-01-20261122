@@ -2,12 +2,12 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const S = 256, C = 64, L = 1e6, O = 65536;
-const OPS: Record<number, readonly [number, number, number]> = {
-  0: [0, 0, 0], 1: [1, 0, 1], 2: [4, 0, 1], 3: [0, 1, 0], 4: [0, 1, 2], 5: [0, 2, 2], 6: [0, 2, 3], 7: [0, 3, 3],
-  16: [0, 2, 1], 17: [0, 2, 1], 18: [0, 2, 1], 19: [0, 2, 1], 20: [0, 2, 1], 21: [0, 2, 1], 22: [0, 2, 1], 23: [0, 1, 1],
-  24: [0, 2, 1], 25: [0, 2, 1], 26: [0, 2, 1], 27: [0, 1, 1], 28: [0, 2, 1], 29: [0, 2, 1], 30: [0, 2, 1], 32: [0, 2, 1],
-  33: [0, 2, 1], 34: [0, 2, 1], 48: [2, 0, 0], 49: [2, 1, 0], 50: [2, 1, 0], 51: [2, 0, 0], 52: [0, 0, 0], 64: [0, 1, 1],
-  65: [0, 2, 0], 80: [0, 1, 0], 81: [0, 1, 0], 82: [0, 0, 1], 83: [0, 1, 0]
+const T: Record<number, number> = {
+  0: 0, 1: 17, 2: 65, 3: 4, 4: 6, 5: 10, 6: 11, 7: 15,
+  16: 9, 17: 9, 18: 9, 19: 9, 20: 9, 21: 9, 22: 9, 23: 5,
+  24: 9, 25: 9, 26: 9, 27: 5, 28: 9, 29: 9, 30: 9, 32: 9,
+  33: 9, 34: 9, 48: 32, 49: 36, 50: 36, 51: 32, 52: 0, 64: 5,
+  65: 8, 80: 4, 81: 4, 82: 1, 83: 4
 };
 const enc = new TextEncoder();
 
@@ -19,9 +19,9 @@ export function run(p: Uint8Array, inp: Uint8Array): { stdout: Uint8Array; exit:
   for (;;) {
     if (steps === L) return done(10);
     if (pc < 0 || pc >= n) return done(9);
-    const op = p[pc], spec = OPS[op];
-    if (!spec) return done(5);
-    const [imm, pops, pushes] = spec;
+    const op = p[pc], c = T[op];
+    if (c === undefined) return done(5);
+    const imm = c >> 4, pops = (c >> 2) & 3, pushes = c & 3;
     if (pc + imm >= n) return done(9);
     steps++;
     const next = pc + 1 + imm;
@@ -68,9 +68,7 @@ export function run(p: Uint8Array, inp: Uint8Array): { stdout: Uint8Array; exit:
       case 49:
       case 50: {
         const rel = ((p[next - 2] | (p[next - 1] << 8)) << 16) >> 16;
-        let take = true;
-        if (op !== 48) { const v = D[--sp]; take = op === 49 ? v === 0 : v !== 0; }
-        if (take) pc = next + rel;
+        if (op === 48 || (op === 49 ? !D[--sp] : !!D[--sp])) pc = next + rel;
         break;
       }
       case 51:
@@ -82,29 +80,23 @@ export function run(p: Uint8Array, inp: Uint8Array): { stdout: Uint8Array; exit:
         if (!csp) return done(8);
         pc = CS[--csp];
         break;
-      case 64: {
+      case 64:
+      case 65: {
         const addr = D[sp - 1];
         if (addr < 0 || addr >= S) return done(6);
-        D[sp - 1] = M[addr];
-        break;
-      }
-      case 65: {
-        const addr = D[sp - 1], v = D[sp - 2];
-        if (addr < 0 || addr >= S) return done(6);
-        sp -= 2;
-        M[addr] = v;
+        if (op === 64) D[sp - 1] = M[addr];
+        else { M[addr] = D[sp - 2]; sp -= 2; }
         break;
       }
       case 80: {
-        const bytes = enc.encode(String(D[sp - 1]));
-        if (olen + bytes.length > O) return done(11);
-        sp--;
-        out.set(bytes, olen);
-        olen += bytes.length;
+        const b = enc.encode(String(D[--sp]));
+        if (olen + b.length > O) return done(11);
+        out.set(b, olen);
+        olen += b.length;
         break;
       }
       case 81:
-        if (olen + 1 > O) return done(11);
+        if (olen >= O) return done(11);
         out[olen++] = D[--sp] & 255;
         break;
       case 82:
